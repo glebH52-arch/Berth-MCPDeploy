@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"uuid"
 
 	"github.com/glebH52-arch/agent-native-paas/internal/deployment/domain"
 	"github.com/glebH52-arch/agent-native-paas/internal/deployment/repository"
@@ -23,6 +24,14 @@ func (s *ProjectService) CreateProject(ctx context.Context, name, repositoryURL 
 		return nil, err
 	}
 	err = s.projectRepository.CreateProject(ctx, project)
+	if err != nil {
+		return nil, err
+	}
+	return project, nil
+}
+
+func (s *ProjectService) GetProjectByID(ctx context.Context, id uuid.UUID) (*domain.Project, error) {
+	project, err := s.projectRepository.GetProject(ctx, id)
 	if err != nil {
 		return nil, err
 	}

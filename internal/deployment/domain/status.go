@@ -13,6 +13,7 @@ const (
 	DeploymentStatusHealthChecking    DeploymentStatus = "healthchecking"
 	DeploymentStatusHealthCheckFailed DeploymentStatus = "healthcheck_failed"
 	DeploymentStatusRunning           DeploymentStatus = "running"
+	DeploymentStatusFailed            DeploymentStatus = "failed"
 )
 
 var allowedTransitions = map[DeploymentStatus][]DeploymentStatus{
@@ -21,19 +22,19 @@ var allowedTransitions = map[DeploymentStatus][]DeploymentStatus{
 	},
 	DeploymentStatusCloning: {
 		DeploymentStatusBuilding,
-		DeploymentStatusCloneFailed,
+		DeploymentStatusFailed,
 	},
 	DeploymentStatusBuilding: {
 		DeploymentStatusStarting,
-		DeploymentStatusBuildFailed,
+		DeploymentStatusFailed,
 	},
 	DeploymentStatusStarting: {
 		DeploymentStatusHealthChecking,
-		DeploymentStatusStartFailed,
+		DeploymentStatusFailed,
 	},
 	DeploymentStatusHealthChecking: {
 		DeploymentStatusRunning,
-		DeploymentStatusHealthCheckFailed,
+		DeploymentStatusFailed,
 	},
 }
 
