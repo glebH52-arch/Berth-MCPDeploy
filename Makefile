@@ -14,3 +14,6 @@ migrate-force:
 
 migrate-status:
 	@migrate -path ./migrations -database ${DATABASE_URL} version
+
+deployment-up:
+	go run ./cmd/deployment-service

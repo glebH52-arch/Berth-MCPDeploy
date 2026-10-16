@@ -29,29 +29,30 @@ CREATE TABLE deployments (
     error_class TEXT,
     error_message TEXT,
     log_excerpt TEXT,
+
     CONSTRAINT fk_deployments_project
         FOREIGN KEY (project_id)
         REFERENCES projects(id)
         ON DELETE CASCADE,
+
     CONSTRAINT deployments_status_check
         CHECK (status IN (
             'queued',
             'cloning',
-            'clone_failed',
             'building',
-            'build_failed',
             'starting',
-            'start_failed',
             'healthchecking',
-            'healthcheck_failed',
-            'running'
+            'running',
+            'failed'
         )),
+
     CONSTRAINT deployments_required_fields_check
         CHECK (
             length(trim(repository_url)) > 0
             AND length(trim(branch)) > 0
             AND length(trim(commit_sha)) > 0
         ),
+
     CONSTRAINT deployments_running_check
         CHECK (
             status <> 'running'
@@ -61,24 +62,26 @@ CREATE TABLE deployments (
                 AND running_at IS NOT NULL
             )
         ),
+
     CONSTRAINT deployments_failure_check
         CHECK (
-            status NOT IN (
-                'clone_failed',
-                'build_failed',
-                'start_failed',
-                'healthcheck_failed'
-            )
+            status <> 'failed'
             OR (
                 failed_at IS NOT NULL
                 AND failure_stage IS NOT NULL
-                AND length(trim(failure_stage)) > 0
+                AND failure_stage IN (
+                    'cloning',
+                    'building',
+                    'starting',
+                    'healthchecking'
+                )
                 AND error_class IS NOT NULL
                 AND length(trim(error_class)) > 0
                 AND error_message IS NOT NULL
                 AND length(trim(error_message)) > 0
             )
         ),
+
     CONSTRAINT deployments_project_pair_unique
         UNIQUE (id, project_id)
 );
@@ -101,9 +104,9 @@ CREATE INDEX idx_deployments_project_status
 CREATE UNIQUE INDEX idx_deployments_one_active_per_project
     ON deployments(project_id)
     WHERE status IN (
-    'queued',
-    'cloning',
-    'building',
-    'starting',
-    'healthchecking'
-);
+        'queued',
+        'cloning',
+        'building',
+        'starting',
+        'healthchecking'
+    );

@@ -36,14 +36,13 @@ func (r *PostgresProjectRepository) CreateProject(ctx context.Context, project *
 	return nil
 }
 func (r *PostgresProjectRepository) GetProject(ctx context.Context, id uuid.UUID) (*domain.Project, error) {
-	project := domain.Project{}
-	row := r.pool.QueryRow(ctx, stmtGetProjectByID, id)
-	err := row.Scan(&project.ID, &project.Name, &project.RepositoryURL, &project.RunningDeploymentID, &project.CreatedAt)
+	p := domain.Project{}
+	err := r.pool.QueryRow(ctx, stmtGetProjectByID, id).Scan(&p.ID, &p.Name, &p.RepositoryURL, &p.RunningDeploymentID, &p.CreatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, repository.ErrProjectNotFound
 		}
 		return nil, fmt.Errorf("get project: %w", err)
 	}
-	return &project, nil
+	return &p, nil
 }

@@ -42,10 +42,7 @@ var (
 
 func (d *Deployment) ChangeStatus(newStatus DeploymentStatus) error {
 	switch newStatus {
-	case DeploymentStatusCloneFailed,
-		DeploymentStatusBuildFailed,
-		DeploymentStatusStartFailed,
-		DeploymentStatusHealthCheckFailed:
+	case DeploymentStatusFailed:
 		return ErrFailureStatusRequiresFail
 	case DeploymentStatusRunning:
 		return ErrRunningStatusRequiresComplete
@@ -63,40 +60,28 @@ func (d *Deployment) ChangeStatus(newStatus DeploymentStatus) error {
 	return nil
 }
 
-func (d *Deployment) Fail(failedStatus DeploymentStatus, errorClass, errorMessage, logExcerpt string) error {
-	var stage string
-
-	switch failedStatus {
-	case DeploymentStatusCloneFailed:
-		stage = "cloning"
-	case DeploymentStatusBuildFailed:
-		stage = "building"
-	case DeploymentStatusStartFailed:
-		stage = "starting"
-	case DeploymentStatusHealthCheckFailed:
-		stage = "healthchecking"
-	default:
-		return ErrInvalidFailureStatus
-	}
-
-	if !CanTransition(d.Status, failedStatus) {
+func (d *Deployment) Fail(errorClass, errorMessage, logExcerpt string) error {
+	if !CanTransition(d.Status, DeploymentStatusFailed) {
 		return ErrInvalidDeploymentTransition
 	}
 
-	if strings.TrimSpace(errorClass) == "" {
+	errorClass = strings.TrimSpace(errorClass)
+	errorMessage = strings.TrimSpace(errorMessage)
+
+	if errorClass == "" {
 		return ErrEmptyErrorClass
 	}
-
-	if strings.TrimSpace(errorMessage) == "" {
+	if errorMessage == "" {
 		return ErrEmptyErrorMessage
 	}
 
 	now := time.Now().UTC()
+	stage := string(d.Status)
 
-	d.Status = failedStatus
+	d.Status = DeploymentStatusFailed
 	d.FailureStage = stage
-	d.ErrorClass = strings.TrimSpace(errorClass)
-	d.ErrorMessage = strings.TrimSpace(errorMessage)
+	d.ErrorClass = errorClass
+	d.ErrorMessage = errorMessage
 	d.LogExcerpt = logExcerpt
 	d.FailedAt = &now
 	d.UpdatedAt = now
