@@ -7,6 +7,7 @@ import (
 	"time"
 	"uuid"
 
+	deploymentv1 "github.com/glebH52-arch/agent-native-paas/internal/contracts/deployment/v1"
 	"github.com/glebH52-arch/agent-native-paas/internal/deployment/domain"
 )
 
@@ -16,26 +17,10 @@ var (
 )
 
 const (
-	EventTypeDeploymentRequested = "deployment.requested"
+	EventTypeDeploymentRequested = "deployment.requested.v1"
 	AggregateTypeDeployment      = "deployment"
 	DeploymentEventSchemaVersion = 1
 )
-
-type DeploymentRequestedPayload struct {
-	RepositoryURL string `json:"repository_url"`
-	Branch        string `json:"branch"`
-	CommitSHA     string `json:"commit_sha"`
-}
-
-type DeploymentRequestedEvent struct {
-	EventID       uuid.UUID                  `json:"event_id"`
-	EventType     string                     `json:"event_type"`
-	SchemaVersion int                        `json:"schema_version"`
-	OccurredAt    time.Time                  `json:"occurred_at"`
-	CorrelationID uuid.UUID                  `json:"correlation_id"`
-	DeploymentID  uuid.UUID                  `json:"deployment_id"`
-	Payload       DeploymentRequestedPayload `json:"payload"`
-}
 
 type OutboxEvent struct {
 	ID            uuid.UUID
@@ -44,6 +29,9 @@ type OutboxEvent struct {
 	EventType     string
 	Payload       json.RawMessage
 	CreatedAt     time.Time
+
+	LockedBy    *string
+	LockedUntil *time.Time
 }
 
 func NewDeploymentRequestedEvent(d *domain.Deployment) (*OutboxEvent, error) {
@@ -62,7 +50,7 @@ func NewDeploymentRequestedEvent(d *domain.Deployment) (*OutboxEvent, error) {
 	eventID := uuid.New()
 	now := time.Now().UTC()
 
-	event := DeploymentRequestedEvent{
+	event := deploymentv1.DeploymentRequestedEvent{
 		EventID:       eventID,
 		EventType:     EventTypeDeploymentRequested,
 		SchemaVersion: DeploymentEventSchemaVersion,
@@ -70,10 +58,11 @@ func NewDeploymentRequestedEvent(d *domain.Deployment) (*OutboxEvent, error) {
 		CorrelationID: d.ID,
 		DeploymentID:  d.ID,
 
-		Payload: DeploymentRequestedPayload{
+		Payload: deploymentv1.DeploymentRequestedPayload{
 			RepositoryURL: d.RepositoryURL,
 			Branch:        d.Branch,
 			CommitSHA:     d.CommitSHA,
+			ProjectID:     d.ProjectID,
 		},
 	}
 

@@ -17,3 +17,9 @@ migrate-status:
 
 deployment-up:
 	go run ./cmd/deployment-service
+
+publisher-up:
+	go run ./cmd/outbox-publisher
+
+worker-up:
+	go run ./cmd/build-worker
