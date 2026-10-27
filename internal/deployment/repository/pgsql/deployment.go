@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 	"uuid"
 
+	deploymentv1 "github.com/glebH52-arch/agent-native-paas/internal/contracts/deployment/v1"
 	"github.com/glebH52-arch/agent-native-paas/internal/deployment/domain"
 	"github.com/glebH52-arch/agent-native-paas/internal/deployment/events"
 	"github.com/glebH52-arch/agent-native-paas/internal/deployment/repository"
@@ -131,4 +133,59 @@ func (r *PostgresDeploymentRepository) GetDeployment(ctx context.Context, id uui
 		return nil, fmt.Errorf("get deployment: %w", err)
 	}
 	return d, nil
+}
+
+func (r *PostgresDeploymentRepository) ApplyCloningStarted(ctx context.Context, consumerName string, eventID uuid.UUID, deploymentID uuid.UUID) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("apply cloning: %w", err)
+	}
+	defer tx.Rollback(ctx)
+	tag, err := tx.Exec(ctx, stmtRegisterInboxEvent, consumerName, eventID, deploymentv1.EventTypeDeploymentCloningStarted)
+	if err != nil {
+		return fmt.Errorf("register inbox: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		var processedAt *time.Time
+
+		err := tx.QueryRow(ctx, stmtGetInboxProcessedAt, consumerName, eventID).Scan(&processedAt)
+		if err != nil {
+			return fmt.Errorf("get inbox processed_at: %w", err)
+		}
+
+		if processedAt != nil {
+			return nil
+		}
+
+		return fmt.Errorf("inbox event exists but is not processed")
+	}
+	tag, err = tx.Exec(ctx, stmtMarkDeploymentCloning, deploymentID)
+	if err != nil {
+		return fmt.Errorf("mark deployment cloning: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		var status string
+		err := tx.QueryRow(ctx, stmtGetDeploymentStatus, deploymentID).Scan(&status)
+		if err != nil {
+			return fmt.Errorf("get deployment status: %w", err)
+		}
+		if status != "cloning" {
+			return repository.ErrDeploymentStatusConflict
+		}
+
+	}
+
+	tag, err = tx.Exec(ctx, stmtMarkInboxProcessed, consumerName, eventID)
+	if err != nil {
+		return fmt.Errorf("mark inbox processed: %w", err)
+	}
+	if tag.RowsAffected() != 1 {
+		return fmt.Errorf("inbox event was not marked processed")
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit apply cloning: %w", err)
+	}
+
+	return nil
 }

@@ -33,10 +33,11 @@ func main() {
 			Branch:    "main",
 		},
 	)*/
-	response, err := client.GetDeployment(
+	response, err := client.CreateDeployment(
 		ctx,
-		&deploymentv1.GetDeploymentRequest{
-			DeploymentId: "fdbf3ca3-a1de-4613-a5a4-22b5ffcb0c67",
+		&deploymentv1.CreateDeploymentRequest{
+			ProjectId: "be884e21-0ef6-4c4d-a924-862c4ec41eda",
+			Branch:    "main",
 		},
 	)
 

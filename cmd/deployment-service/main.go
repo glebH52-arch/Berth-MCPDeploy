@@ -11,6 +11,7 @@ import (
 
 	"github.com/glebH52-arch/agent-native-paas/internal/deployment/config"
 	gitresolver "github.com/glebH52-arch/agent-native-paas/internal/deployment/git"
+	kafkamessaging "github.com/glebH52-arch/agent-native-paas/internal/deployment/messaging/kafka"
 	"github.com/glebH52-arch/agent-native-paas/internal/deployment/repository/pgsql"
 	"github.com/glebH52-arch/agent-native-paas/internal/deployment/service"
 
@@ -25,12 +26,12 @@ import (
 
 func main() {
 	if err := run(); err != nil {
-		panic(err)
+		log.Panic(err)
 	}
 }
 
 func run() error {
-	cfg, err := config.Load()
+	cfg, err := config.LoadDeployment()
 	if err != nil {
 		return fmt.Errorf("load config: %w", err)
 	}
@@ -49,9 +50,16 @@ func run() error {
 		projectPgsqlRepo,
 		resolver,
 	)
+	reader := kafkamessaging.NewReader(cfg.KafkaBrokers)
+	defer reader.Close()
+
+	consumer := kafkamessaging.NewKafkaEventConsumer(reader, deploymentService)
+
+	kafkaError := make(chan error, 1)
+
 	handler := grpcserver.NewServer(deploymentService)
 
-	listener, err := net.Listen("tcp", "127.0.0.1:50051")
+	listener, err := net.Listen("tcp", cfg.GRPCAddr)
 	if err != nil {
 		log.Print(err)
 		return err
@@ -60,28 +68,37 @@ func run() error {
 	server := grpc.NewServer()
 	deploymentv1.RegisterDeploymentServiceServer(server, handler)
 
-	log.Println("gRPC listening on 127.0.0.1:50051")
+	log.Printf("gRPC listening on %s", cfg.GRPCAddr)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	serverErr := make(chan error, 1)
+
 	go func() {
 		serverErr <- server.Serve(listener)
 	}()
 
 	var serveErr error
-
+	consumerDone := make(chan struct{})
+	go func() {
+		defer close(consumerDone)
+		kafkaError <- consumer.Run(ctx)
+	}()
 	select {
 	case <-ctx.Done():
-		stop()
+
 		log.Println("shutdown signal received")
 
 	case err := <-serverErr:
 		if err != nil && !errors.Is(err, grpc.ErrServerStopped) {
 			serveErr = fmt.Errorf("grpc serve: %w", err)
 		}
+	case err := <-kafkaError:
+		if err != nil {
+			serveErr = fmt.Errorf("deployment event consumer: %w", err)
+		}
 	}
-
+	stop()
 	done := make(chan struct{})
 	go func() {
 		server.GracefulStop()
@@ -100,6 +117,6 @@ func run() error {
 		server.Stop()
 		<-done
 	}
-
+	<-consumerDone
 	return serveErr
 }
